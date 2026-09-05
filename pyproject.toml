@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "office-copilot-agent"
+version = "0.1.0"
+description = "A lightweight office-work copilot agent for managing tasks, spreadsheets, and email drafts."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "openpyxl>=3.1.0",
+]
+
+[project.optional-dependencies]
+develop = [
+  "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
