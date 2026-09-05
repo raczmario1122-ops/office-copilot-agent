@@ -19,6 +19,16 @@ python -m office_copilot_agent report office_report.xlsx
 python -m office_copilot_agent draft-email team@example.com "Weekly update" "All tasks are on track."
 ```
 
+## GUI mode
+
+Launch the desktop interface:
+
+```bash
+python -m office_copilot_agent.gui
+```
+
+The GUI includes a task manager, Excel export button, email drafting area, and a chat section where the assistant can answer questions like: “What do I need in this app?”
+
 ## Example Python usage
 
 ```python

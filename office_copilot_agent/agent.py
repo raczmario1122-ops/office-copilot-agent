@@ -133,6 +133,35 @@ class OfficeAgent:
             lines.append(f"- {task.title} [{task.priority}] ({task.status})")
         return "\n".join(lines)
 
+    def respond_to_chat(self, prompt: str) -> str:
+        text = (prompt or "").strip()
+        if not text:
+            return "Ask me about tasks, reports, emails, or office workflow help."
+
+        lowered = text.lower()
+        if "what" in lowered and ("need" in lowered or "needed" in lowered or "required" in lowered):
+            return (
+                "This app needs: task tracking, due-date management, Excel report export, "
+                "email drafting, and a simple chat interface for office work."
+            )
+        if "task" in lowered:
+            if "add" in lowered or "create" in lowered:
+                words = [word for word in text.split() if word not in {"add", "create", "task", "please", "the"}]
+                title = " ".join(words).strip(" ,.-")
+                if title:
+                    self.add_task(title)
+                    return f"Added task: {title}"
+            return "I can manage office tasks, including adding, listing, and marking them complete."
+        if "report" in lowered or "excel" in lowered:
+            return "I can export a spreadsheet report with tasks, due dates, priorities, and status."
+        if "email" in lowered:
+            return "I can draft emails and optionally send them through SMTP when server details are provided."
+        if "list" in lowered:
+            if not self.tasks:
+                return "There are no tasks yet."
+            return "Current tasks: " + "; ".join(task.title for task in self.tasks)
+        return "I can help with tasks, Excel reports, and office emails. Ask me for a task, report, or email update."
+
 
 def _parse_args() -> None:
     import argparse
