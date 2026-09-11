@@ -30,12 +30,12 @@ Offline/local browser automation starter with **Java** and **C++** implementatio
 
 ## Java project
 
-Path: `/home/runner/work/office-copilot-agent/office-copilot-agent/java-automation`
+Path: `java-automation/`
 
 ### Configure
 
 Edit:
-- `/home/runner/work/office-copilot-agent/office-copilot-agent/java-automation/config/config.json`
+- `java-automation/config/config.json`
 
 Set:
 - `chromeDriverPath`
@@ -47,7 +47,7 @@ Set:
 ### Build and run
 
 ```bash
-cd /home/runner/work/office-copilot-agent/office-copilot-agent/java-automation
+cd java-automation
 mvn -DskipTests package
 java -jar target/java-automation-1.0.0-jar-with-dependencies.jar config/config.json
 ```
@@ -73,12 +73,12 @@ This creates a Windows `.exe` installer under `dist`.
 
 ## C++ project
 
-Path: `/home/runner/work/office-copilot-agent/office-copilot-agent/cpp-automation`
+Path: `cpp-automation/`
 
 ### Configure
 
 Edit:
-- `/home/runner/work/office-copilot-agent/office-copilot-agent/cpp-automation/config/config.json`
+- `cpp-automation/config/config.json`
 
 Set:
 - `chromeDriverUrl` (default `http://127.0.0.1:9515`)
@@ -89,7 +89,7 @@ Set:
 ### Build and run
 
 ```bash
-cd /home/runner/work/office-copilot-agent/office-copilot-agent/cpp-automation
+cd cpp-automation
 cmake -S . -B build
 cmake --build build --config Release
 ./build/cpp_automation config/config.json

@@ -17,58 +17,81 @@ namespace {
 constexpr const char* kElementKey = "element-6066-11e4-a52e-4f735466cecf";
 
 struct UrlParts {
+    std::string scheme;
     std::string host;
     int port;
     std::string path;
 };
 
-UrlParts parseHttpUrl(const std::string& url) {
-    const std::string prefix = "http://";
-    if (url.rfind(prefix, 0) != 0) {
-        throw std::runtime_error("Only http:// URLs are supported in C++ app: " + url);
+UrlParts parseUrl(const std::string& url) {
+    std::string scheme;
+    std::string rest;
+
+    if (url.rfind("http://", 0) == 0) {
+        scheme = "http";
+        rest = url.substr(7);
+    } else if (url.rfind("https://", 0) == 0) {
+        scheme = "https";
+        rest = url.substr(8);
+    } else {
+        throw std::runtime_error("Unsupported URL scheme: " + url);
     }
 
-    std::string rest = url.substr(prefix.size());
     auto slashPos = rest.find('/');
     std::string hostPort = slashPos == std::string::npos ? rest : rest.substr(0, slashPos);
     std::string path = slashPos == std::string::npos ? "/" : rest.substr(slashPos);
 
     auto colonPos = hostPort.find(':');
+    int defaultPort = scheme == "https" ? 443 : 80;
     if (colonPos == std::string::npos) {
-        return {hostPort, 80, path};
+        return {scheme, hostPort, defaultPort, path};
     }
 
     std::string host = hostPort.substr(0, colonPos);
     int port = std::stoi(hostPort.substr(colonPos + 1));
-    return {host, port, path};
+    return {scheme, host, port, path};
 }
 
-std::string httpRequest(const std::string& method, const std::string& url, const json* payload = nullptr) {
-    UrlParts p = parseHttpUrl(url);
-    httplib::Client client(p.host, p.port);
+template <typename TClient>
+std::string executeRequest(TClient& client, const std::string& method, const std::string& path, const std::string& body) {
     client.set_connection_timeout(10, 0);
     client.set_read_timeout(30, 0);
 
-    std::string body = payload ? payload->dump() : "";
     httplib::Result res;
-
     if (method == "GET") {
-        res = client.Get(p.path);
+        res = client.Get(path);
     } else if (method == "POST") {
-        res = client.Post(p.path, body, "application/json");
+        res = client.Post(path, body, "application/json");
     } else if (method == "DELETE") {
-        res = client.Delete(p.path);
+        res = client.Delete(path);
     } else {
         throw std::runtime_error("Unsupported HTTP method: " + method);
     }
 
     if (!res) {
-        throw std::runtime_error("HTTP request failed: " + url);
+        throw std::runtime_error("HTTP request failed at path: " + path);
     }
     if (res->status < 200 || res->status >= 300) {
-        throw std::runtime_error("HTTP status " + std::to_string(res->status) + " for " + url + " body: " + res->body);
+        throw std::runtime_error("HTTP status " + std::to_string(res->status) + " body: " + res->body);
     }
     return res->body;
+}
+
+std::string httpRequest(const std::string& method, const std::string& url, const json* payload = nullptr) {
+    UrlParts p = parseUrl(url);
+    std::string body = payload ? payload->dump() : "";
+
+    if (p.scheme == "http") {
+        httplib::Client client(p.host, p.port);
+        return executeRequest(client, method, p.path, body);
+    }
+
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+    httplib::SSLClient client(p.host, p.port);
+    return executeRequest(client, method, p.path, body);
+#else
+    throw std::runtime_error("https is not enabled in this build: " + url);
+#endif
 }
 
 std::vector<std::string> readNonEmptyLines(const std::string& filePath) {
@@ -198,6 +221,9 @@ void deleteSession(const std::string& base, const std::string& sessionId) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    std::string chromeDriverUrl;
+    std::string sessionId;
+
     try {
         if (argc < 2) {
             std::cerr << "Usage: cpp_automation <config.json>\n";
@@ -208,12 +234,12 @@ int main(int argc, char** argv) {
         if (!configFile) throw std::runtime_error("Cannot open config file");
         json config = json::parse(configFile);
 
-        const std::string chromeDriverUrl = config.value("chromeDriverUrl", "http://127.0.0.1:9515");
+        chromeDriverUrl = config.value("chromeDriverUrl", "http://127.0.0.1:9515");
         const bool headless = config.value("headless", false);
         const auto urls = readNonEmptyLines(config.at("urlsFile").get<std::string>());
         const auto data = loadData(config.at("dataFile").get<std::string>());
 
-        const std::string sessionId = createSession(chromeDriverUrl, headless);
+        sessionId = createSession(chromeDriverUrl, headless);
 
         for (const auto& url : urls) {
             navigateTo(chromeDriverUrl, sessionId, url);
@@ -243,9 +269,17 @@ int main(int argc, char** argv) {
             }
         }
 
-        deleteSession(chromeDriverUrl, sessionId);
+        if (!sessionId.empty()) {
+            deleteSession(chromeDriverUrl, sessionId);
+        }
         return 0;
     } catch (const std::exception& ex) {
+        if (!chromeDriverUrl.empty() && !sessionId.empty()) {
+            try {
+                deleteSession(chromeDriverUrl, sessionId);
+            } catch (...) {
+            }
+        }
         std::cerr << "Error: " << ex.what() << "\n";
         return 1;
     }
