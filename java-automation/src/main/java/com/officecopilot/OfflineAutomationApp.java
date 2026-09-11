@@ -1,21 +1,21 @@
 package com.officecopilot;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.microsoft.playwright.*;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.openqa.selenium.*;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.interactions.Actions;
-import org.openqa.selenium.support.ui.ExpectedConditions;
-import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -28,40 +28,81 @@ public class OfflineAutomationApp {
     private static final Logger LOG = Logger.getLogger(OfflineAutomationApp.class.getName());
 
     public static void main(String[] args) throws Exception {
-        Path configPath = args.length > 0
-                ? Paths.get(args[0])
-                : Paths.get("config", "config.json");
+        Path configPath = args.length > 0 ? Paths.get(args[0]) : Paths.get("config", "config.json");
+        AutomationConfig config = loadConfigOrDefault(configPath);
 
-        AutomationConfig config = new ObjectMapper().readValue(configPath.toFile(), AutomationConfig.class);
         configureLogging(config.logsDirectory);
+        Map<String, String> formData = loadFormDataOrDefault(config.dataFile);
+        List<String> urls = loadUrlsOrDefault(config.urlsFile);
 
-        Map<String, String> formData = loadFormData(config.dataFile);
-        List<String> urls = readLines(config.urlsFile);
+        List<String> reportLines = new ArrayList<>();
+        reportLines.add("Run time: " + LocalDateTime.now());
+        reportLines.add("Features list name: Features_list_main");
 
-        System.setProperty("webdriver.chrome.driver", config.chromeDriverPath);
-        ChromeOptions options = new ChromeOptions();
+        BrowserType.LaunchOptions launchOptions = new BrowserType.LaunchOptions().setHeadless(config.headless);
         if (config.chromeBinaryPath != null && !config.chromeBinaryPath.isBlank()) {
-            options.setBinary(config.chromeBinaryPath);
-        }
-        if (config.headless) {
-            options.addArguments("--headless=new");
+            launchOptions.setExecutablePath(Paths.get(config.chromeBinaryPath));
         }
 
-        WebDriver driver = new ChromeDriver(options);
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(config.timeoutSeconds));
+        try (Playwright playwright = Playwright.create();
+             Browser browser = playwright.chromium().launch(launchOptions)) {
+            BrowserContext context = browser.newContext();
+            Page page = context.newPage();
+            page.setDefaultTimeout(config.timeoutMillis);
 
-        try {
             for (String url : urls) {
-                driver.get(url);
+                page.navigate(url);
                 LOG.info("Opened URL: " + url);
+                reportLines.add("Opened URL: " + url);
 
                 for (ActionSpec action : config.actions) {
-                    executeAction(driver, wait, action, formData);
+                    executeAction(page, action, formData, config, reportLines);
                 }
             }
-        } finally {
-            driver.quit();
         }
+
+        writePdfReport(config.pdfReportPath, reportLines);
+        LOG.info("PDF report created: " + config.pdfReportPath);
+    }
+
+    private static AutomationConfig loadConfigOrDefault(Path configPath) {
+        try {
+            if (Files.exists(configPath)) {
+                return new ObjectMapper().readValue(configPath.toFile(), AutomationConfig.class);
+            }
+        } catch (Exception ex) {
+            LOG.warning("Config load failed, using defaults: " + ex.getMessage());
+        }
+        return defaultConfig();
+    }
+
+    private static AutomationConfig defaultConfig() {
+        AutomationConfig c = new AutomationConfig();
+        c.headless = false;
+        c.timeoutMillis = 20000;
+        c.urlsFile = "data/urls.txt";
+        c.dataFile = "data/form-data.txt";
+        c.logsDirectory = "logs";
+        c.pdfReportPath = "logs/analysis-report.pdf";
+        c.tesseractCommand = "tesseract";
+        c.actions = List.of(
+                action("analyze", null, null, null, 0),
+                action("type", "input[name='q']", null, "searchTerm", 0),
+                action("wait", null, null, null, 1000),
+                action("click", "button[type='submit']", null, null, 0),
+                action("analyze", null, null, null, 0)
+        );
+        return c;
+    }
+
+    private static ActionSpec action(String type, String selector, String value, String valueFrom, long waitMillis) {
+        ActionSpec a = new ActionSpec();
+        a.type = type;
+        a.selector = selector;
+        a.value = value;
+        a.valueFrom = valueFrom;
+        a.waitMillis = waitMillis;
+        return a;
     }
 
     private static void configureLogging(String logsDirectory) throws IOException {
@@ -73,42 +114,110 @@ public class OfflineAutomationApp {
         LOG.setLevel(Level.INFO);
     }
 
-    private static void executeAction(WebDriver driver, WebDriverWait wait, ActionSpec action, Map<String, String> formData) {
+    private static void executeAction(Page page, ActionSpec action, Map<String, String> formData,
+                                      AutomationConfig config, List<String> reportLines) {
         try {
-            switch (action.type.toLowerCase(Locale.ROOT)) {
+            String actionType = action.type == null ? "" : action.type.toLowerCase(Locale.ROOT);
+            switch (actionType) {
                 case "analyze" -> {
-                    String title = driver.getTitle();
-                    String bodyText = driver.findElement(By.tagName("body")).getText();
-                    String sample = bodyText.length() > 250 ? bodyText.substring(0, 250) + "..." : bodyText;
+                    String title = page.title();
+                    String body = Optional.ofNullable(page.textContent("body")).orElse("");
+                    String sample = body.length() > 250 ? body.substring(0, 250) + "..." : body;
                     LOG.info("Page title: " + title);
                     LOG.info("Page text sample: " + sample);
+                    reportLines.add("Title: " + title);
+                    reportLines.add("Text sample: " + sample);
                 }
                 case "click" -> {
-                    WebElement element = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector(action.selector)));
-                    new Actions(driver).moveToElement(element).perform();
-                    element.click();
+                    if (action.selector == null || action.selector.isBlank()) return;
+                    page.locator(action.selector).first().click();
                     LOG.info("Clicked: " + action.selector);
+                    reportLines.add("Clicked: " + action.selector);
                 }
                 case "type" -> {
-                    WebElement element = wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector(action.selector)));
-                    element.clear();
+                    if (action.selector == null || action.selector.isBlank()) return;
                     String value = action.value;
                     if (action.valueFrom != null && !action.valueFrom.isBlank()) {
                         value = formData.getOrDefault(action.valueFrom, "");
                     }
-                    element.sendKeys(value == null ? "" : value);
+                    page.locator(action.selector).first().fill(value == null ? "" : value);
                     LOG.info("Typed value into: " + action.selector);
+                    reportLines.add("Typed into: " + action.selector);
                 }
                 case "wait" -> {
                     long millis = action.waitMillis > 0 ? action.waitMillis : 1000;
-                    Thread.sleep(millis);
+                    page.waitForTimeout(millis);
                     LOG.info("Waited for " + millis + " ms");
+                }
+                case "ocrimage" -> {
+                    if (action.selector == null || action.selector.isBlank()) return;
+                    Files.createDirectories(Paths.get(config.logsDirectory));
+                    Path imagePath = Paths.get(config.logsDirectory, "ocr-source.png");
+                    byte[] bytes = page.locator(action.selector).first().screenshot();
+                    Files.write(imagePath, bytes);
+                    String ocrText = runTesseract(config.tesseractCommand, imagePath);
+                    LOG.info("OCR text: " + ocrText);
+                    reportLines.add("OCR from " + action.selector + ": " + ocrText);
                 }
                 default -> LOG.warning("Unsupported action type: " + action.type);
             }
         } catch (Exception ex) {
             LOG.severe("Action failed [" + action.type + "] on selector [" + action.selector + "]: " + ex.getMessage());
+            reportLines.add("Action failed: " + action.type + " / " + action.selector + " => " + ex.getMessage());
         }
+    }
+
+    private static String runTesseract(String cmd, Path imagePath) {
+        try {
+            Process process = new ProcessBuilder(cmd, imagePath.toString(), "stdout").redirectErrorStream(true).start();
+            byte[] out = process.getInputStream().readAllBytes();
+            int code = process.waitFor();
+            String text = new String(out, StandardCharsets.UTF_8).trim();
+            return code == 0 ? text : "OCR command failed (install local Tesseract): " + text;
+        } catch (Exception ex) {
+            return "OCR unavailable (install local Tesseract): " + ex.getMessage();
+        }
+    }
+
+    private static void writePdfReport(String pdfPath, List<String> lines) throws IOException {
+        Path path = Paths.get(pdfPath);
+        if (path.getParent() != null) {
+            Files.createDirectories(path.getParent());
+        }
+
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 10);
+                content.setLeading(14.5f);
+                content.newLineAtOffset(50, 750);
+                for (String line : lines) {
+                    String safe = line == null ? "" : line.replaceAll("[\\r\\n]+", " ");
+                    content.showText(safe.length() > 120 ? safe.substring(0, 120) : safe);
+                    content.newLine();
+                }
+                content.endText();
+            }
+
+            document.save(path.toFile());
+        }
+    }
+
+    private static List<String> loadUrlsOrDefault(String path) throws IOException {
+        if (path == null || path.isBlank() || !Files.exists(Paths.get(path))) {
+            return List.of("https://duckduckgo.com");
+        }
+        return readLines(path);
+    }
+
+    private static Map<String, String> loadFormDataOrDefault(String path) throws IOException {
+        if (path == null || path.isBlank() || !Files.exists(Paths.get(path))) {
+            return Map.of("searchTerm", "office copilot automation");
+        }
+        return loadFormData(path);
     }
 
     private static List<String> readLines(String path) throws IOException {
@@ -179,13 +288,9 @@ public class OfflineAutomationApp {
             DataFormatter formatter = new DataFormatter();
             for (int i = 0; i < header.getLastCellNum(); i++) {
                 Cell keyCell = header.getCell(i);
-                if (keyCell == null) {
-                    continue;
-                }
+                if (keyCell == null) continue;
                 String key = formatter.formatCellValue(keyCell).trim();
-                if (key.isEmpty()) {
-                    continue;
-                }
+                if (key.isEmpty()) continue;
                 Cell valueCell = values.getCell(i);
                 String value = valueCell == null ? "" : formatter.formatCellValue(valueCell);
                 map.put(key, value);
@@ -195,13 +300,14 @@ public class OfflineAutomationApp {
     }
 
     public static class AutomationConfig {
-        public String chromeDriverPath;
         public String chromeBinaryPath;
         public boolean headless = false;
-        public int timeoutSeconds = 15;
-        public String urlsFile;
-        public String dataFile;
+        public int timeoutMillis = 20000;
+        public String urlsFile = "data/urls.txt";
+        public String dataFile = "data/form-data.txt";
         public String logsDirectory = "logs";
+        public String pdfReportPath = "logs/analysis-report.pdf";
+        public String tesseractCommand = "tesseract";
         public List<ActionSpec> actions = List.of();
     }
 

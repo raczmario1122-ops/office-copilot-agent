@@ -1,0 +1,9 @@
+1. Input URLs and open pages in Chrome
+2. Mouse/click interaction on page elements
+3. Analyze seen page content (title/text)
+4. Fill inputs from local data sources (TXT/CSV/XLSX in Java)
+5. PDF report export from run analysis
+6. OCR text reading from analyzed browser images (requires local Tesseract)
+7. Local/offline app runtime with optional local config overrides
+8. Kotlin version included (C++ version not required)
+9. Space for future additions by user

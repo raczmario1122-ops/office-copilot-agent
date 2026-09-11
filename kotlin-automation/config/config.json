@@ -5,7 +5,7 @@
   "urlsFile": "data/urls.txt",
   "dataFile": "data/form-data.txt",
   "logsDirectory": "logs",
-  "pdfReportPath": "logs/analysis-report.pdf",
+  "pdfReportPath": "logs/analysis-report-kotlin.pdf",
   "tesseractCommand": "tesseract",
   "actions": [
     { "type": "analyze" },

@@ -1,65 +1,70 @@
 # office-copilot-agent
 
-Offline/local browser automation starter with **Java** and **C++** implementations for Chrome.
+Offline/local browser automation starter with **Java (Playwright for Java)** and **Kotlin** implementations for Chrome.
 
 ## What is included
 
-- `java-automation/`: Java app using Selenium + ChromeDriver
+- `java-automation/`: Java app using Playwright for Java
   - URL list loading
-  - Mouse move + click
+  - Click/type/wait actions
   - Page analysis (title + text sample)
-  - Form input typing from `.txt`, `.csv`, or `.xlsx`
-  - Local run logs
-  - Maven build + `jpackage` EXE instructions
+  - Form input typing from `.txt`, `.csv`, `.xlsx`
+  - OCR text extraction from browser images (`ocrImage` action, local Tesseract required)
+  - PDF analysis report output
+  - Built-in defaults so it can run without mandatory config edits
 
-- `cpp-automation/`: C++ app using ChromeDriver WebDriver HTTP API
+- `kotlin-automation/`: Kotlin app using Playwright for Java bindings
   - URL list loading
-  - Click and type actions
-  - Basic page analysis (title)
-  - Data from `.txt` or `.csv`
-  - CMake build to native executable
+  - Click/type/wait actions
+  - Page analysis (title + text sample)
+  - OCR text extraction from browser images (`ocrImage` action, local Tesseract required)
+  - PDF analysis report output
+  - Built-in defaults so it can run without mandatory config edits
 
-## Prerequisites (offline/local)
+- `Features_list_main.txt`: initial feature list requested by user
 
-1. Install Google Chrome locally.
-2. Install matching ChromeDriver locally.
-3. Keep ChromeDriver path/URL in the app config files.
-4. Prepare local data files (`txt/csv/xlsx`) and URL file.
+## Local requirements
+
+1. Java 17+
+2. Maven 3.9+
+3. Google Chrome locally installed
+4. (Optional, for OCR) local `tesseract` command available in PATH
 
 ---
 
-## Java project
+## Java project (Playwright)
 
 Path: `java-automation/`
-
-### Configure
-
-Edit:
-- `java-automation/config/config.json`
-
-Set:
-- `chromeDriverPath`
-- `chromeBinaryPath`
-- `urlsFile`
-- `dataFile`
-- `actions`
 
 ### Build and run
 
 ```bash
 cd java-automation
 mvn -DskipTests package
+java -jar target/java-automation-1.0.0-jar-with-dependencies.jar
+```
+
+Optional config:
+
+```bash
 java -jar target/java-automation-1.0.0-jar-with-dependencies.jar config/config.json
 ```
 
-### Build EXE from Java
+### Playwright browser install (first time)
 
-Use `jpackage` on Windows:
+```bash
+cd java-automation
+mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chrome"
+```
+
+### Build EXE (Windows)
+
+You can do it locally on Windows with `jpackage`:
 
 ```powershell
 cd C:\path\to\java-automation
 mvn -DskipTests package
-jpackage --name OfficeWebAutomation \
+jpackage --name OfficeWebAutomationJava \
   --input target \
   --main-jar java-automation-1.0.0-jar-with-dependencies.jar \
   --main-class com.officecopilot.OfflineAutomationApp \
@@ -67,42 +72,52 @@ jpackage --name OfficeWebAutomation \
   --dest dist
 ```
 
-This creates a Windows `.exe` installer under `dist`.
-
 ---
 
-## C++ project
+## Kotlin project
 
-Path: `cpp-automation/`
-
-### Configure
-
-Edit:
-- `cpp-automation/config/config.json`
-
-Set:
-- `chromeDriverUrl` (default `http://127.0.0.1:9515`)
-- `urlsFile`
-- `dataFile`
-- `actions`
+Path: `kotlin-automation/`
 
 ### Build and run
 
 ```bash
-cd cpp-automation
-cmake -S . -B build
-cmake --build build --config Release
-./build/cpp_automation config/config.json
+cd kotlin-automation
+mvn -DskipTests package
+java -jar target/kotlin-automation-1.0.0-jar-with-dependencies.jar
 ```
 
-### Build EXE on Windows
+Optional config:
 
-Build with MSVC/MinGW via CMake; output will be `cpp_automation.exe` in your build folder.
+```bash
+java -jar target/kotlin-automation-1.0.0-jar-with-dependencies.jar config/config.json
+```
+
+### Playwright browser install (first time)
+
+```bash
+cd kotlin-automation
+mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chrome"
+```
+
+### Build EXE (Windows)
+
+You can do it locally on Windows with `jpackage`:
+
+```powershell
+cd C:\path\to\kotlin-automation
+mvn -DskipTests package
+jpackage --name OfficeWebAutomationKotlin \
+  --input target \
+  --main-jar kotlin-automation-1.0.0-jar-with-dependencies.jar \
+  --main-class com.officecopilot.kotlin.OfflineAutomationKotlinAppKt \
+  --type exe \
+  --dest dist
+```
 
 ---
 
 ## Notes
 
-- The Java implementation is the recommended primary solution.
-- C++ implementation is a practical local starter using WebDriver HTTP directly.
-- For large Excel-driven workflows, prefer Java (`.xlsx` support is included there).
+- App is local/offline, while target web pages can be online in Chrome.
+- Local config files are supported, but default working parameters are already built in.
+- If OCR is needed, install Tesseract locally (`tesseract` command).
