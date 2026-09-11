@@ -1,4 +1,4 @@
-#include <curl/curl.h>
+#include <httplib.h>
 #include <nlohmann/json.hpp>
 
 #include <chrono>
@@ -16,47 +16,59 @@ using json = nlohmann::json;
 namespace {
 constexpr const char* kElementKey = "element-6066-11e4-a52e-4f735466cecf";
 
-size_t writeCallback(void* contents, size_t size, size_t nmemb, void* userp) {
-    auto* s = static_cast<std::string*>(userp);
-    s->append(static_cast<char*>(contents), size * nmemb);
-    return size * nmemb;
+struct UrlParts {
+    std::string host;
+    int port;
+    std::string path;
+};
+
+UrlParts parseHttpUrl(const std::string& url) {
+    const std::string prefix = "http://";
+    if (url.rfind(prefix, 0) != 0) {
+        throw std::runtime_error("Only http:// URLs are supported in C++ app: " + url);
+    }
+
+    std::string rest = url.substr(prefix.size());
+    auto slashPos = rest.find('/');
+    std::string hostPort = slashPos == std::string::npos ? rest : rest.substr(0, slashPos);
+    std::string path = slashPos == std::string::npos ? "/" : rest.substr(slashPos);
+
+    auto colonPos = hostPort.find(':');
+    if (colonPos == std::string::npos) {
+        return {hostPort, 80, path};
+    }
+
+    std::string host = hostPort.substr(0, colonPos);
+    int port = std::stoi(hostPort.substr(colonPos + 1));
+    return {host, port, path};
 }
 
 std::string httpRequest(const std::string& method, const std::string& url, const json* payload = nullptr) {
-    CURL* curl = curl_easy_init();
-    if (!curl) {
-        throw std::runtime_error("Failed to init curl");
-    }
+    UrlParts p = parseHttpUrl(url);
+    httplib::Client client(p.host, p.port);
+    client.set_connection_timeout(10, 0);
+    client.set_read_timeout(30, 0);
 
-    std::string response;
-    struct curl_slist* headers = nullptr;
-    headers = curl_slist_append(headers, "Content-Type: application/json");
+    std::string body = payload ? payload->dump() : "";
+    httplib::Result res;
 
-    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
-
-    std::string body;
-    if (payload != nullptr) {
-        body = payload->dump();
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
-    }
-
-    if (method == "POST") {
-        curl_easy_setopt(curl, CURLOPT_POST, 1L);
+    if (method == "GET") {
+        res = client.Get(p.path);
+    } else if (method == "POST") {
+        res = client.Post(p.path, body, "application/json");
     } else if (method == "DELETE") {
-        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "DELETE");
+        res = client.Delete(p.path);
+    } else {
+        throw std::runtime_error("Unsupported HTTP method: " + method);
     }
 
-    CURLcode res = curl_easy_perform(curl);
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
-
-    if (res != CURLE_OK) {
-        throw std::runtime_error(std::string("curl request failed: ") + curl_easy_strerror(res));
+    if (!res) {
+        throw std::runtime_error("HTTP request failed: " + url);
     }
-    return response;
+    if (res->status < 200 || res->status >= 300) {
+        throw std::runtime_error("HTTP status " + std::to_string(res->status) + " for " + url + " body: " + res->body);
+    }
+    return res->body;
 }
 
 std::vector<std::string> readNonEmptyLines(const std::string& filePath) {
@@ -141,9 +153,13 @@ std::string createSession(const std::string& chromeDriverUrl, bool headless) {
     };
 
     auto response = json::parse(httpRequest("POST", chromeDriverUrl + "/session", &caps));
-    return response["value"]["sessionId"].is_null()
-        ? response["sessionId"].get<std::string>()
-        : response["value"]["sessionId"].get<std::string>();
+    if (response.contains("value") && response["value"].contains("sessionId") && !response["value"]["sessionId"].is_null()) {
+        return response["value"]["sessionId"].get<std::string>();
+    }
+    if (response.contains("sessionId")) {
+        return response["sessionId"].get<std::string>();
+    }
+    throw std::runtime_error("Failed to parse session id from ChromeDriver response");
 }
 
 void navigateTo(const std::string& base, const std::string& sessionId, const std::string& url) {
@@ -179,7 +195,7 @@ void deleteSession(const std::string& base, const std::string& sessionId) {
     httpRequest("DELETE", base + "/session/" + sessionId);
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char** argv) {
     try {
