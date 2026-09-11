@@ -1,0 +1,13 @@
+{
+  "chromeDriverUrl": "http://127.0.0.1:9515",
+  "headless": false,
+  "urlsFile": "data/urls.txt",
+  "dataFile": "data/form-data.txt",
+  "actions": [
+    { "type": "analyze" },
+    { "type": "type", "selector": "input[name='q']", "valueFrom": "searchTerm" },
+    { "type": "wait", "waitMillis": 1000 },
+    { "type": "click", "selector": "input[type='submit']" },
+    { "type": "analyze" }
+  ]
+}

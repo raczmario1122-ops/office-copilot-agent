@@ -1,0 +1,16 @@
+{
+  "chromeDriverPath": "C:/tools/chromedriver/chromedriver.exe",
+  "chromeBinaryPath": "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "headless": false,
+  "timeoutSeconds": 20,
+  "urlsFile": "data/urls.txt",
+  "dataFile": "data/form-data.txt",
+  "logsDirectory": "logs",
+  "actions": [
+    { "type": "analyze" },
+    { "type": "type", "selector": "input[name='q']", "valueFrom": "searchTerm" },
+    { "type": "wait", "waitMillis": 1000 },
+    { "type": "click", "selector": "input[type='submit']" },
+    { "type": "analyze" }
+  ]
+}
