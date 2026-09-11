@@ -186,21 +186,45 @@ public class OfflineAutomationApp {
         }
 
         try (PDDocument document = new PDDocument()) {
+            PDType1Font font = new PDType1Font(Standard14Fonts.FontName.HELVETICA);
+            float fontSize = 10f;
+            float leading = 14.5f;
+            float startX = 50f;
+            float startY = 750f;
+            float bottomMargin = 50f;
+
             PDPage page = new PDPage();
             document.addPage(page);
+            PDPageContentStream content = new PDPageContentStream(document, page);
+            content.beginText();
+            content.setFont(font, fontSize);
+            content.setLeading(leading);
+            content.newLineAtOffset(startX, startY);
+            float currentY = startY;
 
-            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
-                content.beginText();
-                content.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 10);
-                content.setLeading(14.5f);
-                content.newLineAtOffset(50, 750);
-                for (String line : lines) {
-                    String safe = line == null ? "" : line.replaceAll("[\\r\\n]+", " ");
-                    content.showText(safe.length() > 120 ? safe.substring(0, 120) : safe);
-                    content.newLine();
+            for (String line : lines) {
+                if (currentY <= bottomMargin) {
+                    content.endText();
+                    content.close();
+
+                    page = new PDPage();
+                    document.addPage(page);
+                    content = new PDPageContentStream(document, page);
+                    content.beginText();
+                    content.setFont(font, fontSize);
+                    content.setLeading(leading);
+                    content.newLineAtOffset(startX, startY);
+                    currentY = startY;
                 }
-                content.endText();
+
+                String safe = line == null ? "" : line.replaceAll("[\\r\\n]+", " ");
+                content.showText(safe.length() > 120 ? safe.substring(0, 120) : safe);
+                content.newLine();
+                currentY -= leading;
             }
+
+            content.endText();
+            content.close();
 
             document.save(path.toFile());
         }

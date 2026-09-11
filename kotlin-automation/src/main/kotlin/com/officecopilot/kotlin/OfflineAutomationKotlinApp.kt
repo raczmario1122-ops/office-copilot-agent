@@ -144,20 +144,45 @@ private fun writePdf(pdfPath: String, lines: List<String>) {
     path.parent?.let { Files.createDirectories(it) }
 
     PDDocument().use { doc ->
-        val page = PDPage()
+        val font = PDType1Font(Standard14Fonts.FontName.HELVETICA)
+        val fontSize = 10f
+        val leading = 14f
+        val startX = 50f
+        val startY = 750f
+        val bottomMargin = 50f
+
+        var page = PDPage()
         doc.addPage(page)
-        PDPageContentStream(doc, page).use { content ->
-            content.beginText()
-            content.setFont(PDType1Font(Standard14Fonts.FontName.HELVETICA), 10f)
-            content.setLeading(14f)
-            content.newLineAtOffset(50f, 750f)
-            for (line in lines) {
-                val safe = line.replace(Regex("[\\r\\n]+"), " ")
-                content.showText(if (safe.length > 120) safe.substring(0, 120) else safe)
-                content.newLine()
+        var content = PDPageContentStream(doc, page)
+        content.beginText()
+        content.setFont(font, fontSize)
+        content.setLeading(leading)
+        content.newLineAtOffset(startX, startY)
+        var currentY = startY
+
+        for (line in lines) {
+            if (currentY <= bottomMargin) {
+                content.endText()
+                content.close()
+
+                page = PDPage()
+                doc.addPage(page)
+                content = PDPageContentStream(doc, page)
+                content.beginText()
+                content.setFont(font, fontSize)
+                content.setLeading(leading)
+                content.newLineAtOffset(startX, startY)
+                currentY = startY
             }
-            content.endText()
+
+            val safe = line.replace(Regex("[\\r\\n]+"), " ")
+            content.showText(if (safe.length > 120) safe.substring(0, 120) else safe)
+            content.newLine()
+            currentY -= leading
         }
+
+        content.endText()
+        content.close()
         doc.save(path.toFile())
     }
 }

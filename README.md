@@ -54,7 +54,7 @@ java -jar target/java-automation-1.0.0-jar-with-dependencies.jar config/config.j
 
 ```bash
 cd java-automation
-mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chrome"
+mvn org.codehaus.mojo:exec-maven-plugin:3.5.0:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chrome"
 ```
 
 ### Build EXE (Windows)
@@ -96,7 +96,7 @@ java -jar target/kotlin-automation-1.0.0-jar-with-dependencies.jar config/config
 
 ```bash
 cd kotlin-automation
-mvn exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chrome"
+mvn org.codehaus.mojo:exec-maven-plugin:3.5.0:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chrome"
 ```
 
 ### Build EXE (Windows)
