@@ -21,7 +21,7 @@ Offline/local browser automation starter with **Java (Playwright for Java)** and
   - PDF analysis report output
   - Built-in defaults so it can run without mandatory config edits
 
-- `Features_list_main.txt`: initial feature list requested by user
+- `Features_list_main`: initial feature list requested by user
 
 ## Local requirements
 

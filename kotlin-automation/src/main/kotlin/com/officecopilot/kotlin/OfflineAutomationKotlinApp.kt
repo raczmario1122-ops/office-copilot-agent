@@ -28,7 +28,7 @@ data class ActionSpec(
 data class AutomationConfig(
     var chromeBinaryPath: String = "",
     var headless: Boolean = false,
-    var timeoutMillis: Double = 20000.0,
+    var timeoutMillis: Long = 20000,
     var urlsFile: String = "data/urls.txt",
     var dataFile: String = "data/form-data.txt",
     var logsDirectory: String = "logs",
@@ -74,7 +74,7 @@ private fun runFlow(
 ) {
     val context = browser.newContext()
     val page = context.newPage()
-    page.setDefaultTimeout(config.timeoutMillis)
+    page.setDefaultTimeout(config.timeoutMillis.toDouble())
 
     for (url in urls) {
         page.navigate(url)

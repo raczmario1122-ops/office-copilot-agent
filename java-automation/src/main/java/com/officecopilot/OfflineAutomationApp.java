@@ -48,7 +48,7 @@ public class OfflineAutomationApp {
              Browser browser = playwright.chromium().launch(launchOptions)) {
             BrowserContext context = browser.newContext();
             Page page = context.newPage();
-            page.setDefaultTimeout(config.timeoutMillis);
+            page.setDefaultTimeout((double) config.timeoutMillis);
 
             for (String url : urls) {
                 page.navigate(url);
@@ -326,7 +326,7 @@ public class OfflineAutomationApp {
     public static class AutomationConfig {
         public String chromeBinaryPath;
         public boolean headless = false;
-        public int timeoutMillis = 20000;
+        public long timeoutMillis = 20000;
         public String urlsFile = "data/urls.txt";
         public String dataFile = "data/form-data.txt";
         public String logsDirectory = "logs";
